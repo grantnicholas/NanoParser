@@ -11,7 +11,7 @@ implicit def toFunc[A](p: Parser[A]):List[Char] => Result[A] = {
 //////////////////////////////////////////////////////////////////////////
 
 sealed trait Result[+A]{ 
-	def map[B](f: A => B) = this match{
+	def map[B](f: A => B):Result[B] = this match{
 		case Success((a, rest)) => Success((f(a), rest))
 		case Failure(m) => Failure(m)
 	}
@@ -26,9 +26,13 @@ case class Parser[A](p: List[Char] => Result[A]){
 
 	def many0() = ParseUtils.many0(p)
 	def many1() = ParseUtils.many1(p)
+
+	def maybe() = ParseUtils.maybe(p)
 }
 
 object ParseUtils{
+	val comma = ','
+
 	def unit[A](item: A):Parser[A] = {
 		(chars: List[Char]) => {
 			Success(item, chars)
@@ -49,6 +53,14 @@ object ParseUtils{
 			case false => Failure("Did not match string str")
 		}
 	}
+
+	def maybe[A](p: Parser[A]): Parser[Option[A]] = {
+		(chars: List[Char]) => p(chars) match{
+			case Failure(m)        => Success[Option[A]]((None, chars))
+			case Success((r,rest)) => Success[Option[A]]((Some(r),rest))
+		}
+	}
+
 
 	def flatMap[A,B](p1: Parser[A], f: A => Parser[B]):Parser[B] = {
 		(chars: List[Char]) => p1(chars) match{
@@ -90,6 +102,14 @@ object ParseUtils{
 			}
 		}
 	}
+
+
+	def sepBy[A](p: Parser[A], ch: Char): Parser[List[A]] = {
+		for{
+			r   <- p
+			rs  <- many0(for {_ <- parseChar(ch); rest <- p} yield rest)
+		}yield(r::rs)
+	}
 }
 
 import ParseUtils._
@@ -113,6 +133,14 @@ val tests = () => {
 	val testWordStream = "hello world".toList
 	val testWord = testWordParser(testWordStream)
 	assert(testWord == Success("hel", "lo world".toList))
+
+	val testMaybeParserFail = maybe(parseWord("whoah"))
+	val testMaybeParserPass = maybe(parseWord("hello "))
+	val testMaybeStream = "hello world".toList
+	val testMaybeFail = testMaybeParserFail(testMaybeStream)
+	val testMaybePass = testMaybeParserPass(testMaybeStream)
+	assert(testMaybeFail == Success((None, testMaybeStream)))
+	assert(testMaybePass == Success((Some("hello "), "world".toList)))
 
 	val combineParsers = parseChar('h').flatMap(h => 
 	                     parseChar('o').flatMap(o => 
@@ -138,7 +166,8 @@ val tests = () => {
 	val testMap2 = testMapParser2(testMapStream)
 	assert(testMap2 == Success(("ho", "wdy".toList)))
 
-	val testEitherParser = parseWord("howdy") <|> parseWord("hello")
+	val testEitherParser = parseWord("howdy") <|> 
+						   parseWord("hello")
 	val testEitherStream = "hello world".toList
 	val testEither = testEitherParser(testEitherStream)
 	assert(testEither == Success(("hello"), List(' ', 'w', 'o', 'r', 'l', 'd')))
@@ -154,6 +183,11 @@ val tests = () => {
 	assert(testMany1 == Failure("Did not match string str"))
 	val testMany1Good = many1Parser(testMany0Stream)
 	assert(testMany1Good == Success((List("badger", "badger", "badger"), "mushroom".toList)))
+
+	val sepByParser = sepBy(parseWord("1"), ',')
+	val sepByStream = "1,1,1,1,1".toList
+	val testSepBy = sepByParser(sepByStream)
+	assert(testSepBy == Success((List("1", "1", "1", "1", "1"), List())))
 }
 
 tests()
