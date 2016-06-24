@@ -10,9 +10,9 @@ We want to parse a json blob string into a List[String]
 
 val arrayStream = "["bobby", "sally", "sam", "george"]".toList
 
-let parseNonSpecials = parsePredicate(ch => !Set('"', '\').contains(ch))
+val parseNonSpecials = parsePredicate(ch => !Set('"', '\').contains(ch))
 
-let quotedWord = for{
+val quotedWord = for{
 	_ <- parseChar('"')
 	word <- parseNonSpecials().many0()
 	_ <- parseChar('"')
