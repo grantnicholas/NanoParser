@@ -2,6 +2,7 @@ package tests
 
 import nanoparser.parsing._
 import nanoparser.ParseUtils._
+import nanoparser.ParseImpl._
 
 object Main extends App{
 
@@ -72,7 +73,7 @@ object Main extends App{
 		val many1Parser = parseWord("badger").many1()
 		val testMany1Stream = "mushroombadgerbadgerbadger".toList
 		val testMany1 = many1Parser(testMany1Stream)
-		assert(testMany1 == Failure("Did not match string str"))
+		assert(testMany1.isInstanceOf[Failure[Any]])
 		val testMany1Good = many1Parser(testMany0Stream)
 		assert(testMany1Good == Success((List("badger", "badger", "badger"), "mushroom".toList)))
 
@@ -84,11 +85,46 @@ object Main extends App{
 		val arrayStream = "[1,1,1,1,1]".toList
 		val arrayParser = for{
 			_ <- parseChar(openBrak)
-			values   <- sepBy(parseWord("1"), comma)
+			values   <- parseWord("1").sepBy(comma)
 			_ <- parseChar(closeBrak)
 		}yield(values)
 		val testArrayParser = arrayParser(arrayStream)
 		assert(testArrayParser == Success((List("1", "1", "1", "1", "1"), List())))
+
+		val maybeEmptyArrayStream = "[]".toList
+		val maybeEmptyArrayParser = 
+		(for{
+			_ <- parseChar(openBrak)
+			values   <- parseWord("1").sepBy(comma)
+			_ <- parseChar(closeBrak)
+		}yield(values)) <|> 
+		(for{
+			_ <- parseChar(openBrak)
+			_ <- parseChar(closeBrak)
+		}yield(List()))
+		val testmaybeEmptyArrayParser = maybeEmptyArrayParser(maybeEmptyArrayStream)
+		assert(testmaybeEmptyArrayParser == Success((List()), List()))
+	
+		val maybeFloatStream = "1234".toList
+		val maybeFloatParser = parseFloat()
+		val maybeFloat = maybeFloatParser(maybeFloatStream)
+		assert(maybeFloat == Success((1234, List())))
+
+		val maybeFloatStreamErr = "1234a5.6".toList
+		val maybeFloatErr = maybeFloatParser(maybeFloatStreamErr)
+		assert(maybeFloatErr == Success((1234, List('a', '5', '.', '6'))))
+	
+		val floatStreamErr = "a123".toList
+		val floatErr = maybeFloatParser(floatStreamErr)
+		assert(true == (floatErr match{
+			case(o: Failure[Float]) => true
+			case _                  => false
+		}))
+
+		val betweenStream = "[12345]".toList
+		val betweenParser = between('[', parseFloat() ,']')
+		val betweenVal    = betweenParser(betweenStream)
+		assert(betweenVal == Success((12345, List())))
 	}
 
 	tests()
